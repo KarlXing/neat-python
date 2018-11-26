@@ -17,7 +17,7 @@ from neat.six_util import iteritems, itervalues
 # configuration. This scheme should be adaptive so that species do not evolve
 # to become "cautious" and only make very slow progress.
 
-class DefaultReproduction(DefaultClassConfig):
+class CarlReproduction(DefaultClassConfig):
     """
     Implements the default NEAT-python reproduction scheme:
     explicit fitness sharing with fixed-time species stagnation.
@@ -36,7 +36,7 @@ class DefaultReproduction(DefaultClassConfig):
         self.reporters = reporters
         self.genome_indexer = count(1)
         self.stagnation = stagnation
-        self.ancestors = {}
+        # self.ancestors = {}
 
     def create_new(self, genome_type, genome_config, num_genomes):
         new_genomes = {}
@@ -96,11 +96,13 @@ class DefaultReproduction(DefaultClassConfig):
         # interfering with the shared fitness scheme.
         all_fitnesses = []
         remaining_species = []
+        for sid, s in iteritems(species.species):
+            s.update_alive_members()
         for stag_sid, stag_s, stagnant in self.stagnation.update(species, generation):
             if stagnant:
                 self.reporters.species_stagnant(stag_sid, stag_s)
             else:
-                all_fitnesses.extend(m.fitness for m in itervalues(stag_s.members))
+                all_fitnesses.extend(m.fitness for m in itervalues(stag_s.alive_members))
                 remaining_species.append(stag_s)
         # The above comment was not quite what was happening - now getting fitnesses
         # only from members of non-stagnated species.
@@ -119,7 +121,7 @@ class DefaultReproduction(DefaultClassConfig):
         fitness_range = max(1.0, max_fitness - min_fitness)
         for afs in remaining_species:
             # Compute adjusted fitness.
-            msf = mean([m.fitness for m in itervalues(afs.members)])
+            msf = mean([m.fitness for m in itervalues(afs.alive_members)])
             af = (msf - min_fitness) / fitness_range
             afs.adjusted_fitness = af
 
@@ -128,7 +130,7 @@ class DefaultReproduction(DefaultClassConfig):
         self.reporters.info("Average adjusted fitness: {:.3f}".format(avg_adjusted_fitness))
 
         # Compute the number of new members for each species in the new generation.
-        previous_sizes = [len(s.members) for s in remaining_species]
+        previous_sizes = [len(s.alive_members) for s in remaining_species]
         min_species_size = self.reproduction_config.min_species_size
         # Isn't the effective min_species_size going to be max(min_species_size,
         # self.reproduction_config.elitism)? That would probably produce more accurate tracking
@@ -146,9 +148,9 @@ class DefaultReproduction(DefaultClassConfig):
             assert spawn > 0
 
             # The species has at least one member for the next generation, so retain it.
-            old_members = list(iteritems(s.members))
-            s.members = {}
-            species.species[s.key] = s
+            old_members = list(iteritems(s.alive_members))
+            # s.members = {}
+            # species.species[s.key] = s
 
             # Sort members in order of descending fitness.
             old_members.sort(reverse=True, key=lambda x: x[1].fitness)
