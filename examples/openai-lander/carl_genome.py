@@ -1,13 +1,16 @@
 """Carl Genome Implementation"""
 """Add children, parent, family_generation ,alive attributes"""
+import neat
 
-from genome import DefaultGenome
+from neat.genome import DefaultGenome
+import random
 
-class NewLanderGenome(DefaultGenome):
+
+class CarlLanderGenome(DefaultGenome):
     def __init__(self, key):
         super().__init__(key)
         self.discount = None
-        self.children = set()
+        self.children = []
         self.parent = None
         self.family_generation = None
         self.alive = True
@@ -30,11 +33,23 @@ class NewLanderGenome(DefaultGenome):
         disc_diff = abs(self.discount - other.discount)
         return dist + disc_diff
 
-    def set_parent(self, parent1, parent2=None):
+    def set_parent(self, parent1, parent1_family_generation, parent2=None, parent2_family_generation = None):
         if parent2 is None:
             self.parent = parent1
+            self.family_generation = parent1_family_generation + 1
         else:
             self.parent = random.choice((parent1, parent2))
+            if self.parent == parent1:
+                self.family_generation = parent1_family_generation + 1
+            else:
+                self.family_generation = parent2_family_generation + 1
+
+    def show(self):
+        print("discount: ", self.discount)
+        print("children: ", self.children)
+        print("parent: ", self.parent)
+        print("family_generation: ", self.family_generation)
+        print("alive: ", self.alive)
 
     def add_child(self, child):
         self.children.append(child)

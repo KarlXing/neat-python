@@ -11,7 +11,7 @@ members dict still contain not only alive genomes, but also some dead genomes.
 max_family_generation is the maximum family generation of genomes which will 
 cause species spilting once it exceeds the limit.
 """
-class NewSpecies(object):
+class CarlSpecies(object):
     def __init__(self, key, generation):
         self.key = key
         self.created = generation
@@ -28,6 +28,7 @@ class NewSpecies(object):
         self.root = root
         self.members = members
         self.root_family_generation = members[root].family_generation
+        self.update_alive_members()
 
     def update_alive_members(self):
         self.alive_members = {}
@@ -36,21 +37,25 @@ class NewSpecies(object):
                 self.alive_members[gid] = g
 
     def get_fitnesses(self):
-        return [m.fitness for m in itervalues(self.members)]
+        return [m.fitness for m in itervalues(self.alive_members)]
 
     def clean(self, population):
         assert(isinstance(population, dict))
         dead_genomes = set(iterkeys(population))
+        # print("in clean ", dead_genomes)
         for gid in dead_genomes:
+            # print("gid ,", gid)
             assert(gid in self.members)
             g = self.members[gid]
             # change state to dead
             g.killed()
             # remove itself from its parent's children list
-            if gid != root:
-                parent = self.members[g.parent]
-                parent.children.pop(gid)
-                sweep(gid)
+            if gid != self.root:
+                self.sweep(gid)
+            # members = []
+            # for k in iterkeys(self.members):
+            #     members.append(k)
+            # print("after clean gid ", members)
 
     def sweep(self, gid):
         g = self.members[gid]
@@ -58,17 +63,37 @@ class NewSpecies(object):
             return
         pid = g.parent
         del self.members[gid]
-        sweep(self, pid)
+        p = self.members[pid]
+        p.children.remove(gid)
+        self.sweep(pid)
 
     def get_offspring(self, gid):
         offspring = {}
         g = self.members[gid]
         for child in g.children:
             offspring[child] = self.members[child]
-            offspring.update(get_offspring(self, child))
+            offspring.update(self.get_offspring(child))
         return offspring
 
-class DefaultSpeciesSet(DefaultClassConfig):
+    def get_new_roots(self, root):
+        new_roots = set()
+        for gid in self.members[root].children:
+            g = self.members[gid]
+            if g.alive:
+                new_roots.add(gid)
+            else:
+                new_roots.update(self.get_new_roots(gid))
+        return new_roots
+
+    def show(self):
+        print("all members")
+        for gid, g in iteritems(self.members):
+            print(gid, " children: ", g.children )
+        print("alive members")
+        for gid, g in iteritems(self.alive_members):
+            print(gid, " children: ", g.children )
+
+class CarlSpeciesSet(DefaultClassConfig):
     """ Encapsulates the default speciation scheme. """
 
     def __init__(self, config, reporters):
@@ -79,12 +104,27 @@ class DefaultSpeciesSet(DefaultClassConfig):
         self.species = {}
         self.genome_to_species = {}
 
+    def init_with_roots(self, roots, generation):
+        self.species = {}
+        for gid, g in iteritems(roots):
+            g.family_generation = 0
+            sid = next(self.indexer)
+            s = CarlSpecies(sid, generation)
+            members = {}
+            members[gid] = g
+            s.update(gid, members)
+            self.species[sid] = s
+            self.genome_to_species[gid] = sid
+
     @classmethod
     def parse_config(cls, param_dict):
         return DefaultClassConfig(param_dict,
-                                  [ConfigParameter('compatibility_threshold', float)])
+                                  [ConfigParameter('compatibility_threshold', float),
+                                   ConfigParameter('initial_species', int, 10),
+                                   ConfigParameter('max_family_generation', int, 10)])
 
     def speciate(self, config, population, generation):
+        # print("genome to species: ", self.genome_to_species)
         """
         Place genomes into species by genetic similarity.
 
@@ -110,43 +150,58 @@ class DefaultSpeciesSet(DefaultClassConfig):
                 assert(s.members[gid].alive)
                 new_members[sid].append(gid)
             else:
+                allocated = False
                 for sid, s in iteritems(self.species):
+                    root = s.members[s.root]
+                    # print(sid, " members are : ", s.members)
+                    # print(g.parent, g.parent in s.members)
                     if g.parent in s.members:
+                        allocated = True
                         new_members[sid].append(gid)
                         parent = s.members[g.parent]
                         parent.add_child(gid)
                         s.members[gid] = g
-                        if (parent.family_generation - self.root_family_generation + 1) >
-                                config.species_set_config.family_generation:
+                        if (parent.family_generation - root.family_generation + 1) > \
+                            config.species_set_config.max_family_generation:
                             s.need_split = True
                         break
-                raise RuntimeError("genome was not allocated to any species")
+                if not allocated:
+                    raise RuntimeError("genome was not allocated to any species")
 
         # mark all genomes absent from new_members as dead and clean them
         for sid, s in iteritems(self.species):
             members = new_members[sid]
             dead_genomes = {}
-            for gid, g in iteritems(s.members):
+            for gid, g in iteritems(s.alive_members):
                 if gid not in members:
-                    g.killed()
                     dead_genomes[gid] = g
+            dead = []
+            for k in iterkeys(dead_genomes):
+                dead.append(k)
+            print(sid, "dead genomes ", dead)
+            # print("before clean")
+            # s.show()
             s.clean(dead_genomes)
+            s.update_alive_members()
 
         # update species if reach family generation limit
         # during species spliting, the original root was dropped no matter whether it's alive
+        new_species = {}
         for sid, s in iteritems(self.species):
-            if s.need_split = True:
+            if s.need_split is True:
                 unspeciated = iterkeys(s.members)
-                new_roots = s.members[s.root].children
+                new_roots = s.get_new_roots(s.root)
                 for root in new_roots:
                     new_sid = next(self.indexer)
-                    new_s = NewSpecies(new_sid, generation)
+                    new_s = CarlSpecies(new_sid, generation)
                     new_members = {}
                     new_members[root] = s.members[root]
                     new_members.update(s.get_offspring(root))
                     new_s.update(root, new_members)
-                    self.species[new_sid] = new_s
-                del self.species[sid]
+                    new_species[new_sid] = new_s
+            else:
+                new_species[sid] = s
+        self.species = new_species
 
 
         # update species collection
@@ -154,7 +209,10 @@ class DefaultSpeciesSet(DefaultClassConfig):
         for sid, s in iteritems(self.species):
             for gid in iterkeys(s.members):
                 self.genome_to_species[gid] = sid
-
+        print("after speciation")
+        for sid, s in iteritems(self.species):
+            print("species :", sid)
+            s.show()
 
         # #compatibility_threshold = self.species_set_config.compatibility_threshold
 

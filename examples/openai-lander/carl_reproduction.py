@@ -45,7 +45,7 @@ class CarlReproduction(DefaultClassConfig):
             g = genome_type(key)
             g.configure_new(genome_config)
             new_genomes[key] = g
-            self.ancestors[key] = tuple()
+            # self.ancestors[key] = tuple()
 
         return new_genomes
 
@@ -140,7 +140,7 @@ class CarlReproduction(DefaultClassConfig):
                                            pop_size, min_species_size)
 
         new_population = {}
-        species.species = {}
+        # species.species = {}
         for spawn, s in zip(spawn_amounts, remaining_species):
             # If elitism is enabled, each species always at least gets to retain its elites.
             spawn = max(spawn, self.reproduction_config.elitism)
@@ -184,7 +184,8 @@ class CarlReproduction(DefaultClassConfig):
                 child = config.genome_type(gid)
                 child.configure_crossover(parent1, parent2, config.genome_config)
                 child.mutate(config.genome_config)
+                child.set_parent(parent1_id, parent1.family_generation, parent2_id, parent2.family_generation)
                 new_population[gid] = child
-                self.ancestors[gid] = (parent1_id, parent2_id)
+                # self.ancestors[gid] = (parent1_id, parent2_id)
 
         return new_population
