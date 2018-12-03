@@ -101,6 +101,7 @@ class CarlReproduction(DefaultClassConfig):
         for stag_sid, stag_s, stagnant in self.stagnation.update(species, generation):
             if stagnant:
                 self.reporters.species_stagnant(stag_sid, stag_s)
+                species.species.pop(stag_sid, None)
             else:
                 all_fitnesses.extend(m.fitness for m in itervalues(stag_s.alive_members))
                 remaining_species.append(stag_s)
