@@ -53,6 +53,7 @@ class DefaultReproduction(DefaultClassConfig):
     def compute_spawn(adjusted_fitness, previous_sizes, pop_size, min_species_size):
         """Compute the proper number of offspring per species (proportional to fitness)."""
         af_sum = sum(adjusted_fitness)
+        assert(af_sum > 0)
 
         spawn_amounts = []
         for af, ps in zip(adjusted_fitness, previous_sizes):
@@ -61,17 +62,17 @@ class DefaultReproduction(DefaultClassConfig):
             else:
                 s = min_species_size
 
-            d = (s - ps) * 0.5
-            c = int(round(d))
-            spawn = ps
-            if abs(c) > 0:
-                spawn += c
-            elif d > 0:
-                spawn += 1
-            elif d < 0:
-                spawn -= 1
+            # d = (s - ps) * 0.5
+            # c = int(round(d))
+            # spawn = ps
+            # if abs(c) > 0:
+            #     spawn += c
+            # elif d > 0:
+            #     spawn += 1
+            # elif d < 0:
+            #     spawn -= 1
 
-            spawn_amounts.append(spawn)
+            spawn_amounts.append(s)
 
         # Normalize the spawn amounts so that the next generation is roughly
         # the population size requested by the user.
@@ -81,7 +82,7 @@ class DefaultReproduction(DefaultClassConfig):
 
         return spawn_amounts
 
-    def reproduce(self, config, species, pop_size, generation):
+    def reproduce(self, config, species, pop_size, generation, fitness_function):
         """
         Handles creation of genomes, either from scratch or by sexual or
         asexual reproduction from parents.
@@ -143,7 +144,7 @@ class DefaultReproduction(DefaultClassConfig):
             # If elitism is enabled, each species always at least gets to retain its elites.
             spawn = max(spawn, self.reproduction_config.elitism)
 
-            assert spawn > 0
+            assert spawn >= 0
 
             # The species has at least one member for the next generation, so retain it.
             old_members = list(iteritems(s.members))
@@ -153,28 +154,30 @@ class DefaultReproduction(DefaultClassConfig):
             # Sort members in order of descending fitness.
             old_members.sort(reverse=True, key=lambda x: x[1].fitness)
 
-            # Transfer elites to new generation.
-            if self.reproduction_config.elitism > 0:
-                for i, m in old_members[:self.reproduction_config.elitism]:
-                    new_population[i] = m
-                    spawn -= 1
+            # # Transfer elites to new generation.
+            # if self.reproduction_config.elitism > 0:
+            #     for i, m in old_members[:self.reproduction_config.elitism]:
+            #         new_population[i] = m
+            #         spawn -= 1
 
-            if spawn <= 0:
-                continue
+            # if spawn <= 0:
+            #     continue
 
             # Only use the survival threshold fraction to use as parents for the next generation.
             repro_cutoff = int(math.ceil(self.reproduction_config.survival_threshold *
                                          len(old_members)))
             # Use at least two parents no matter what the threshold fraction result is.
             repro_cutoff = max(repro_cutoff, 2)
-            old_members = old_members[:repro_cutoff]
+            old_members_parents = old_members[:repro_cutoff]
 
             # Randomly choose parents and produce the number of offspring allotted to the species.
-            while spawn > 0:
-                spawn -= 1
+            offspring = {}
+            i = 0
+            while spawn > i:
+                i += 1
 
-                parent1_id, parent1 = random.choice(old_members)
-                parent2_id, parent2 = random.choice(old_members)
+                parent1_id, parent1 = random.choice(old_members_parents)
+                parent2_id, parent2 = random.choice(old_members_parents)
 
                 # Note that if the parents are not distinct, crossover will produce a
                 # genetically identical clone of the parent (but with a different ID).
@@ -182,7 +185,15 @@ class DefaultReproduction(DefaultClassConfig):
                 child = config.genome_type(gid)
                 child.configure_crossover(parent1, parent2, config.genome_config)
                 child.mutate(config.genome_config)
-                new_population[gid] = child
                 self.ancestors[gid] = (parent1_id, parent2_id)
+                offspring[gid] = child
+            if (len(offspring) >0):
+                fitness_function(list(iteritems(offspring)), config)
+
+            old_members.extend(list(iteritems(offspring)))
+            # fitness_function(old_members, config)
+            old_members.sort(reverse=True, key=lambda x: x[1].fitness)
+            new_members = old_members[:spawn]
+            new_population.update(new_members)
 
         return new_population
