@@ -80,8 +80,13 @@ class PooledErrorCompute(object):
             data = []
             while 1:
                 step += 1
-                output = net.activate(observation)
-                action = np.argmax(output)
+                if step < 200 and random.random() < 0.2:
+                    action = env.action_space.sample()
+                else:
+                    output = net.activate(observation)
+                    action = np.argmax(output)
+                # output = net.activate(observation)
+                # action = np.argmax(output)
 
                 observation, reward, done, info = env.step(action)
                 data.append(np.hstack((observation, action, reward)))
@@ -93,12 +98,12 @@ class PooledErrorCompute(object):
             score = np.sum(data[:,-1])
             self.episode_score.append(score)
             scores.append(score)
-            genome.fitness = score
+            genome.fitness = score+600
             self.episode_length.append(step)
 
             #self.test_episodes.append((score, data))
 
-        print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
+        #print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
 
     def evaluate_genomes(self, genomes, config):
         self.generation += 1
@@ -108,7 +113,7 @@ class PooledErrorCompute(object):
         for gid, g in genomes:
             nets.append((g, neat.nn.FeedForwardNetwork.create(g, config)))
 
-        print("network creation time {0}".format(time.time() - t0))
+        #print("network creation time {0}".format(time.time() - t0))
         t0 = time.time()
         self.simulate(nets)
 
@@ -136,7 +141,7 @@ class PooledErrorCompute(object):
         #         reward_error = job.get(timeout=None)
         #         genome.fitness = -np.sum(reward_error) / len(self.test_episodes)
 
-        print("final fitness compute time {0}\n".format(time.time() - t0))
+        #print("final fitness compute time {0}\n".format(time.time() - t0))
 
 
 def run():
@@ -153,14 +158,18 @@ def run():
     pop.add_reporter(stats)
     pop.add_reporter(neat.StdOutReporter(True))
     # Checkpoint every 25 generations or 900 seconds.
-    pop.add_reporter(neat.Checkpointer(100, 9000))
+    # pop.add_reporter(neat.Checkpointer(100, 9000))
 
     # Run until the winner from a generation is able to solve the environment
     # or the user interrupts the process.
     ec = PooledErrorCompute()
+    #pop.fitness_calculate(ec.evaluate_genomes)
     while 1:
         try:
+            t0 = time.time()
             gen_best = pop.run(ec.evaluate_genomes, 5)
+            print("population 5 generations time {0}".format(time.time() - t0))
+
 
             #print(gen_best)
 
@@ -181,11 +190,13 @@ def run():
             print("Average min fitness over last 5 generations: {0}".format(mfs))
 
             # Use the best genomes seen so far as an ensemble-ish control system.
-            best_genomes = stats.best_unique_genomes(3)
+            best_genomes = stats.best_unique_genomes(5)
             best_networks = []
+            best_gid = []
             for g in best_genomes:
                 best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
-
+                best_gid.append(g.key)
+            print("best genomes id : ", best_gid)
             solved = True
             best_scores = []
             for k in range(100):
@@ -210,11 +221,11 @@ def run():
 
                 ec.episode_score.append(score)
                 ec.episode_length.append(step)
-
+                print("get score: ", score)
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
-                print(k, score, avg_score)
                 if avg_score < 200:
+                    print("passed: ", k)
                     solved = False
                     break
 

@@ -139,6 +139,7 @@ class PooledErrorCompute(object):
 
         print("final fitness compute time {0}\n".format(time.time() - t0))
 
+    
 
 def run():
     # Load the config file, which is assumed to live in

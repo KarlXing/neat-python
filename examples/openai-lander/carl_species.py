@@ -50,8 +50,7 @@ class CarlSpecies(object):
             # change state to dead
             g.killed()
             # remove itself from its parent's children list
-            if gid != self.root:
-                self.sweep(gid)
+            self.sweep(gid)
             # members = []
             # for k in iterkeys(self.members):
             #     members.append(k)
@@ -209,10 +208,10 @@ class CarlSpeciesSet(DefaultClassConfig):
         for sid, s in iteritems(self.species):
             for gid in iterkeys(s.members):
                 self.genome_to_species[gid] = sid
-        print("after speciation")
-        for sid, s in iteritems(self.species):
-            print("species :", sid)
-            s.show()
+        # print("after speciation")
+        # for sid, s in iteritems(self.species):
+        #     print("species :", sid)
+        #     s.show()
 
         # #compatibility_threshold = self.species_set_config.compatibility_threshold
 

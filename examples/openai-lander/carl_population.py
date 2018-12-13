@@ -59,6 +59,9 @@ class CarlPopulation(object):
     def remove_reporter(self, reporter):
         self.reporters.remove(reporter)
 
+    def fitness_calculate(self, fitness_function):
+        fitness_function(list(iteritems(self.population)), self.config)
+
     def run(self, fitness_function, n=None):
         """
         Runs NEAT's genetic algorithm for at most n generations.  If n
@@ -83,6 +86,8 @@ class CarlPopulation(object):
             raise RuntimeError("Cannot have no generational limit with no fitness termination")
 
         k = 0
+        # evaluate all genomes in the beginning
+        fitness_function(list(iteritems(self.population)), self.config)
         while n is None or k < n:
             print("k is ", k)
             k += 1
@@ -90,7 +95,7 @@ class CarlPopulation(object):
             self.reporters.start_generation(self.generation)
 
             # Evaluate all genomes using the user-provided function.
-            fitness_function(list(iteritems(self.population)), self.config)
+            # fitness_function(list(iteritems(self.population)), self.config)
 
             # Gather and report statistics.
             best = None
@@ -112,7 +117,7 @@ class CarlPopulation(object):
 
             # Create the next generation from the current generation.
             self.population = self.reproduction.reproduce(self.config, self.species,
-                                                          self.config.pop_size, self.generation)
+                                                          self.config.pop_size, self.generation, fitness_function)
 
             # Check for complete extinction.
             if not self.species.species:

@@ -62,6 +62,7 @@ max_stagnation       = 15
 species_elitism      = 4
 
 [CarlReproduction]
-elitism            = 2
+elitism            = 0
 survival_threshold = 0.2
+min_species_size   = 0
 
