@@ -10,7 +10,7 @@ class CompleteExtinctionException(Exception):
     pass
 
 
-class Population(object):
+class PedigreePopulation(object):
     """
     This class implements the core evolution algorithm:
         1. Evaluate fitness of all genomes.
@@ -37,14 +37,17 @@ class Population(object):
             raise RuntimeError(
                 "Unexpected fitness_criterion: {0!r}".format(config.fitness_criterion))
 
+
         if initial_state is None:
-            # Create a population from scratch, then partition into species.
+            # start with single-individual species
+            initial_species = config.species_set_config.initial_species
+            assert(initial_species > 0)
             self.population = self.reproduction.create_new(config.genome_type,
                                                            config.genome_config,
-                                                           config.pop_size)
-            self.species = config.species_set_type(config.species_set_config, self.reporters)
+                                                           config.species_set_config.initial_species)
             self.generation = 0
-            self.species.speciate(config, self.population, self.generation)
+            self.species = config.species_set_type(config.species_set_config, self.reporters)
+            self.species.init_with_roots(self.population, self.generation)
         else:
             self.population, self.species, self.generation = initial_state
 
@@ -59,7 +62,10 @@ class Population(object):
     def fitness_calculate(self, fitness_function):
         fitness_function(list(iteritems(self.population)), self.config)
 
-    def run(self, fitness_function, recalculate, n=None):
+    # def init_fitness(self, fitness_function):
+    #     fitness_function(list(iteritems(self.population)), self.config)
+
+    def run(self, fitness_function, n=None, recalculate=True):
         """
         Runs NEAT's genetic algorithm for at most n generations.  If n
         is None, run until solution is found or extinction occurs.
@@ -83,15 +89,16 @@ class Population(object):
             raise RuntimeError("Cannot have no generational limit with no fitness termination")
 
         k = 0
+        # evaluate all genomes in the beginning
         if recalculate:
             fitness_function(list(iteritems(self.population)), self.config)
         while n is None or k < n:
+            print("k is:", k)
             k += 1
-
             self.reporters.start_generation(self.generation)
 
             # Evaluate all genomes using the user-provided function.
-            #fitness_function(list(iteritems(self.population)), self.config)
+            # fitness_function(list(iteritems(self.population)), self.config)
 
             # Gather and report statistics.
             best = None
@@ -113,7 +120,7 @@ class Population(object):
 
             # Create the next generation from the current generation.
             self.population = self.reproduction.reproduce(self.config, self.species,
-                                                          self.config.pop_size, self.generation, fitness_function, False)
+                                                          self.config.pop_size, self.generation, fitness_function, True)
 
             # Check for complete extinction.
             if not self.species.species:
@@ -125,9 +132,10 @@ class Population(object):
                     self.population = self.reproduction.create_new(self.config.genome_type,
                                                                    self.config.genome_config,
                                                                    self.config.pop_size)
+                    self.init_fitness(fitness_function)
                 else:
                     raise CompleteExtinctionException()
-
+            # print(len(self.population))
             # Divide the new population into species.
             self.species.speciate(self.config, self.population, self.generation)
 

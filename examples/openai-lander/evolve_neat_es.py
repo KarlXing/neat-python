@@ -16,19 +16,15 @@ import os
 import pickle
 import random
 import time
+import datetime
 
 import visualize
-
-# import carl_genome
-# import carl_population
-# import carl_reproduction
-# import carl_species
-
-from carl_genome import CarlLanderGenome
-from carl_population import CarlPopulation
-from carl_species import CarlSpecies, CarlSpeciesSet
-from carl_reproduction import CarlReproduction
-
+import sys
+sys.path.append("../../../")
+from neatpython.neat.genome import DefaultGenome
+from neatpython.neat.population import Population
+from neatpython.neat.reproduction_es import ESReproduction
+from neatpython.neat.species import DefaultSpeciesSet
 
 NUM_CORES = 8
 
@@ -38,26 +34,6 @@ print("action space: {0!r}".format(env.action_space))
 print("observation space: {0!r}".format(env.observation_space))
 
 env = gym.wrappers.Monitor(env, 'results', force=True)
-
-
-def compute_fitness(genome, net, episodes, min_reward, max_reward):
-    m = int(round(np.log(0.01) / np.log(genome.discount)))
-    discount_function = [genome.discount ** (m - i) for i in range(m + 1)]
-
-    reward_error = []
-    for score, data in episodes:
-        # Compute normalized discounted reward.
-        dr = np.convolve(data[:,-1], discount_function)[m:]
-        dr = 2 * (dr - min_reward) / (max_reward - min_reward) - 1.0
-        dr = np.clip(dr, -1.0, 1.0)
-
-        for row, dr in zip(data, dr):
-            observation = row[:8]
-            action = int(row[8])
-            output = net.activate(observation)
-            reward_error.append(float((output[action] - dr) ** 2))
-
-    return reward_error
 
 
 class PooledErrorCompute(object):
@@ -75,35 +51,36 @@ class PooledErrorCompute(object):
     def simulate(self, nets):
         scores = []
         for genome, net in nets:
-            observation = env.reset()
-            step = 0
             data = []
-            while 1:
-                step += 1
-                if step < 200 and random.random() < 0.2:
-                    action = env.action_space.sample()
-                else:
-                    output = net.activate(observation)
-                    action = np.argmax(output)
+            for i in range(5):
+                observation = env.reset()
+                step = 0
+                while 1:
+                    step += 1
+                    if step < 200 and random.random() < 0.2:
+                        action = env.action_space.sample()
+                    else:
+                        output = net.activate(observation)
+                        action = np.argmax(output)
                 # output = net.activate(observation)
                 # action = np.argmax(output)
 
-                observation, reward, done, info = env.step(action)
-                data.append(np.hstack((observation, action, reward)))
+                    observation, reward, done, info = env.step(action)
+                    data.append(np.hstack((observation, action, reward)))
 
-                if done:
-                    break
+                    if done:
+                        break
 
             data = np.array(data)
-            score = np.sum(data[:,-1])
+            score = np.sum(data[:,-1])/5
             self.episode_score.append(score)
             scores.append(score)
-            genome.fitness = score+600
+            genome.fitness = score + 600
             self.episode_length.append(step)
 
             #self.test_episodes.append((score, data))
 
-        #print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
+        print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
 
     def evaluate_genomes(self, genomes, config):
         self.generation += 1
@@ -113,7 +90,7 @@ class PooledErrorCompute(object):
         for gid, g in genomes:
             nets.append((g, neat.nn.FeedForwardNetwork.create(g, config)))
 
-        #print("network creation time {0}".format(time.time() - t0))
+        print("network creation time {0}".format(time.time() - t0))
         t0 = time.time()
         self.simulate(nets)
 
@@ -141,41 +118,40 @@ class PooledErrorCompute(object):
         #         reward_error = job.get(timeout=None)
         #         genome.fitness = -np.sum(reward_error) / len(self.test_episodes)
 
-        #print("final fitness compute time {0}\n".format(time.time() - t0))
+        # print("final fitness compute time {0}\n".format(time.time() - t0))
 
 
 def run():
     # Load the config file, which is assumed to live in
     # the same directory as this script.
     local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, 'carlconfig')
-    config = neat.Config(CarlLanderGenome, CarlReproduction,
-                         CarlSpeciesSet, neat.DefaultStagnation,
+    config_path = os.path.join(local_dir, 'config')
+    config = neat.Config(DefaultGenome, ESReproduction,
+                         DefaultSpeciesSet, neat.DefaultStagnation,
                          config_path)
 
-    pop = CarlPopulation(config)
+    pop = Population(config)
     stats = neat.StatisticsReporter()
     pop.add_reporter(stats)
     pop.add_reporter(neat.StdOutReporter(True))
+
     # Checkpoint every 25 generations or 900 seconds.
     # pop.add_reporter(neat.Checkpointer(100, 9000))
 
     # Run until the winner from a generation is able to solve the environment
     # or the user interrupts the process.
     ec = PooledErrorCompute()
-    #pop.fitness_calculate(ec.evaluate_genomes)
+    pop.fitness_calculate(ec.evaluate_genomes)
+
+    id = str(datetime.datetime.now())
+    figfile = "ES_"+id+".svg"
     while 1:
         try:
-            t0 = time.time()
-            gen_best = pop.run(ec.evaluate_genomes, 5)
-            print("population 5 generations time {0}".format(time.time() - t0))
-
+            gen_best = pop.run(ec.evaluate_genomes, False, 1)
 
             #print(gen_best)
 
-            visualize.plot_stats(stats, ylog=False, view=False, filename="fitness.svg")
-            pickle.dump(stats, open("save_stats.p", "wb"))
-
+            visualize.plot_stats(stats, ylog=False, view=False, filename=figfile)
             # plt.plot(ec.episode_score, 'g-', label='score')
             # plt.plot(ec.episode_length, 'b-', label='length')
             # plt.grid()
@@ -190,13 +166,11 @@ def run():
             print("Average min fitness over last 5 generations: {0}".format(mfs))
 
             # Use the best genomes seen so far as an ensemble-ish control system.
-            best_genomes = stats.best_unique_genomes(5)
+            best_genomes = stats.best_unique_genomes(3)
             best_networks = []
-            best_gid = []
             for g in best_genomes:
                 best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
-                best_gid.append(g.key)
-            print("best genomes id : ", best_gid)
+
             solved = True
             best_scores = []
             for k in range(100):
@@ -221,11 +195,11 @@ def run():
 
                 ec.episode_score.append(score)
                 ec.episode_length.append(step)
-                print("get score: ", score)
+
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
+                print(k, score, avg_score)
                 if avg_score < 200:
-                    print("passed: ", k)
                     solved = False
                     break
 
@@ -233,22 +207,23 @@ def run():
                 print("Solved.")
 
                 # Save the winners.
-                for n, g in enumerate(best_genomes):
-                    name = 'winner-{0}'.format(n)
-                    with open(name+'.pickle', 'wb') as f:
-                        pickle.dump(g, f)
+                # for n, g in enumerate(best_genomes):
+                #     name = 'winner-{0}'.format(n)
+                #     with open(name+'.pickle', 'wb') as f:
+                #         pickle.dump(g, f)
 
-                    visualize.draw_net(config, g, view=False, filename=name+"-net.gv")
-                    visualize.draw_net(config, g, view=False, filename=name+"-net-enabled.gv",
-                                       show_disabled=False)
-                    visualize.draw_net(config, g, view=False, filename=name+"-net-enabled-pruned.gv",
-                                       show_disabled=False, prune_unused=True)
+                    # visualize.draw_net(config, g, view=False, filename=name+"-net.gv")
+                    # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled.gv",
+                    #                    show_disabled=False)
+                    # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled-pruned.gv",
+                    #                    show_disabled=False, prune_unused=True)
 
                 break
         except KeyboardInterrupt:
             print("User break.")
             break
-
+    stats_file = "NEAT_ES_Stats_"+id+".p"
+    pickle.dump(stats, open(stats_file, "wb"))
     env.close()
 
 

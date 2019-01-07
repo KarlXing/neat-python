@@ -17,7 +17,7 @@ from neat.six_util import iteritems, itervalues
 # configuration. This scheme should be adaptive so that species do not evolve
 # to become "cautious" and only make very slow progress.
 
-class DefaultReproduction(DefaultClassConfig):
+class EPReproduction(DefaultClassConfig):
     """
     Implements the default NEAT-python reproduction scheme:
     explicit fitness sharing with fixed-time species stagnation.
@@ -53,35 +53,38 @@ class DefaultReproduction(DefaultClassConfig):
     def compute_spawn(adjusted_fitness, previous_sizes, pop_size, min_species_size):
         """Compute the proper number of offspring per species (proportional to fitness)."""
         af_sum = sum(adjusted_fitness)
+        assert(af_sum > 0)
 
         spawn_amounts = []
         for af, ps in zip(adjusted_fitness, previous_sizes):
             if af_sum > 0:
                 s = max(min_species_size, af / af_sum * pop_size)
             else:
-                s = min_species_size
+                s = max(min_species_size, 1)
 
-            d = (s - ps) * 0.5
-            c = int(round(d))
-            spawn = ps
-            if abs(c) > 0:
-                spawn += c
-            elif d > 0:
-                spawn += 1
-            elif d < 0:
-                spawn -= 1
+            # d = (s - ps) * 0.5
+            # c = int(round(d))
+            # spawn = ps
+            # if abs(c) > 0:
+            #     spawn += c
+            # elif d > 0:
+            #     spawn += 1
+            # elif d < 0:
+            #     spawn -= 1
 
-            spawn_amounts.append(spawn)
+            spawn_amounts.append(s)
 
         # Normalize the spawn amounts so that the next generation is roughly
         # the population size requested by the user.
         total_spawn = sum(spawn_amounts)
         norm = pop_size / total_spawn
         spawn_amounts = [max(min_species_size, int(round(n * norm))) for n in spawn_amounts]
-
+        # print("sum adjusted_fitness: ", af_sum)
+        # print("adjusted_fitness: \n", adjusted_fitness)
+        # print("spawn amounts: \n", spawn_amounts)
         return spawn_amounts
 
-    def reproduce(self, config, species, pop_size, generation):
+    def reproduce(self, config, species, pop_size, generation, fitness_function, pedigree):
         """
         Handles creation of genomes, either from scratch or by sexual or
         asexual reproduction from parents.
@@ -96,12 +99,29 @@ class DefaultReproduction(DefaultClassConfig):
         # interfering with the shared fitness scheme.
         all_fitnesses = []
         remaining_species = []
-        for stag_sid, stag_s, stagnant in self.stagnation.update(species, generation):
-            if stagnant:
-                self.reporters.species_stagnant(stag_sid, stag_s)
-            else:
-                all_fitnesses.extend(m.fitness for m in itervalues(stag_s.members))
-                remaining_species.append(stag_s)
+
+        if pedigree:
+            empty_species = []
+            for sid, s in iteritems(species.species):
+                s.update_alive_members()
+                if len(s.members) == 0:
+                    empty_species.append(sid)
+            for sid in empty_species:
+                species.species.pop(sid, None)
+            for stag_sid, stag_s, stagnant in self.stagnation.update(species, generation):
+                if stagnant:
+                    self.reporters.species_stagnant(stag_sid, stag_s)
+                    species.species.pop(stag_sid, None)
+                else:
+                    all_fitnesses.extend(m.fitness for m in itervalues(stag_s.members))
+                    remaining_species.append(stag_s)
+        else:
+            for stag_sid, stag_s, stagnant in self.stagnation.update(species, generation):
+                if stagnant:
+                    self.reporters.species_stagnant(stag_sid, stag_s)
+                else:
+                    all_fitnesses.extend(m.fitness for m in itervalues(stag_s.members))
+                    remaining_species.append(stag_s)
         # The above comment was not quite what was happening - now getting fitnesses
         # only from members of non-stagnated species.
 
@@ -138,40 +158,41 @@ class DefaultReproduction(DefaultClassConfig):
                                            pop_size, min_species_size)
 
         new_population = {}
-        species.species = {}
+        #species.species = {}
         for spawn, s in zip(spawn_amounts, remaining_species):
             # If elitism is enabled, each species always at least gets to retain its elites.
             spawn = max(spawn, self.reproduction_config.elitism)
 
-            assert spawn > 0
+            assert spawn >= 0
 
             # The species has at least one member for the next generation, so retain it.
             old_members = list(iteritems(s.members))
-            s.members = {}
-            species.species[s.key] = s
+            # s.members = {}
+            # species.species[s.key] = s
 
             # Sort members in order of descending fitness.
             old_members.sort(reverse=True, key=lambda x: x[1].fitness)
 
             # Transfer elites to new generation.
-            if self.reproduction_config.elitism > 0:
-                for i, m in old_members[:self.reproduction_config.elitism]:
-                    new_population[i] = m
-                    spawn -= 1
+            # if self.reproduction_config.elitism > 0:
+            #     for i, m in old_members[:self.reproduction_config.elitism]:
+            #         new_population[i] = m
+            #         spawn -= 1
 
-            if spawn <= 0:
-                continue
+
 
             # Only use the survival threshold fraction to use as parents for the next generation.
             repro_cutoff = int(math.ceil(self.reproduction_config.survival_threshold *
                                          len(old_members)))
             # Use at least two parents no matter what the threshold fraction result is.
             repro_cutoff = max(repro_cutoff, 2)
-            old_members = old_members[:repro_cutoff]
+            old_members_parents = old_members[:repro_cutoff]
 
             # Randomly choose parents and produce the number of offspring allotted to the species.
-            while spawn > 0:
-                spawn -= 1
+            offspring = {}
+            i = 0
+            while i < spawn:
+                i += 1
 
                 parent1_id, parent1 = random.choice(old_members)
                 parent2_id, parent2 = random.choice(old_members)
@@ -182,7 +203,20 @@ class DefaultReproduction(DefaultClassConfig):
                 child = config.genome_type(gid)
                 child.configure_crossover(parent1, parent2, config.genome_config)
                 child.mutate(config.genome_config)
-                new_population[gid] = child
-                self.ancestors[gid] = (parent1_id, parent2_id)
+                if pedigree:
+                    child.set_parent(parent1_id, parent1.family_generation, parent2_id, parent2.family_generation)
+                else:
+                    self.ancestors[gid] = (parent1_id, parent2_id)
+                offspring[gid] = child
+
+            if len(offspring) > 0 :
+                fitness_function(list(iteritems(offspring)), config)
+
+            # competition between parents and offspring, only top spwan individuals survive
+            old_members.extend(list(iteritems(offspring)))
+            # fitness_function(old_members, config)
+            old_members.sort(reverse=True, key=lambda x: x[1].fitness)
+            new_members = old_members[:spawn]
+            new_population.update(new_members)
 
         return new_population

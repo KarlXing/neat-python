@@ -8,7 +8,7 @@ fitness_criterion     = max
 fitness_threshold     = 1000.0
 reset_on_extinction   = 0
 
-[DefaultGenome]
+[PedigreeGenome]
 num_inputs              = 8
 num_hidden              = 0
 num_outputs             = 4
@@ -51,18 +51,21 @@ weight_mutate_power     = 0.4
 enabled_default         = True
 enabled_mutate_rate     = 0.01
 
-[DefaultSpeciesSet]
+[PedigreeSpeciesSet]
 compatibility_threshold = 3.0
+initial_species         = 10
+max_family_generation = 5
 
 [DefaultStagnation]
 species_fitness_func = mean
-max_stagnation       = 15
+max_stagnation       = 10
 species_elitism      = 4
 
 [EPReproduction]
 elitism            = 0
 survival_threshold = 0.2
+min_species_size   = 0
 
-[ESReproduction]
-elitism            = 0
-survival_threshold = 0.2
+
+[DefaultSpeciesSet]
+compatibility_threshold = 3.0
