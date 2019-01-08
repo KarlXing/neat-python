@@ -166,59 +166,59 @@ def run():
                 continue
 
             # Use the best genomes seen so far as an ensemble-ish control system.
-            best_genomes = stats.best_unique_genomes(5)
-            best_networks = []
-            for g in best_genomes:
-                best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
+            # best_genomes = stats.best_unique_genomes(5)
+            # best_networks = []
+            # for g in best_genomes:
+            #     best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
 
-            solved = True
-            best_scores = []
-            for k in range(100):
-                observation = env.reset()
-                score = 0
-                step = 0
-                while 1:
-                    step += 1
-                    # Use the total reward estimates from all five networks to
-                    # determine the best action given the current state.
-                    votes = np.zeros((4,))
-                    for n in best_networks:
-                        output = n.activate(observation)
-                        votes[np.argmax(output)] += 1
+            # solved = True
+            # best_scores = []
+            # for k in range(100):
+            #     observation = env.reset()
+            #     score = 0
+            #     step = 0
+            #     while 1:
+            #         step += 1
+            #         # Use the total reward estimates from all five networks to
+            #         # determine the best action given the current state.
+            #         votes = np.zeros((9,))
+            #         for n in best_networks:
+            #             output = n.activate(observation)
+            #             votes[np.argmax(output)] += 1
 
-                    best_action = np.argmax(votes)
-                    observation, reward, done, info = env.step(best_action)
-                    score += reward
-                    #env.render()
-                    if done:
-                        break
+            #         best_action = np.argmax(votes)
+            #         observation, reward, done, info = env.step(best_action)
+            #         score += reward
+            #         #env.render()
+            #         if done:
+            #             break
 
-                ec.episode_score.append(score)
-                ec.episode_length.append(step)
+            #     ec.episode_score.append(score)
+            #     ec.episode_length.append(step)
 
-                best_scores.append(score)
-                avg_score = sum(best_scores) / len(best_scores)
-                if avg_score < 200:
-                    writer.add_scalar("analysis/passed", k, g_step)
-                    solved = False
-                    break
+            #     best_scores.append(score)
+            #     avg_score = sum(best_scores) / len(best_scores)
+            #     if avg_score < 200:
+            #         writer.add_scalar("analysis/passed", k, g_step)
+            #         solved = False
+            #         break
 
-            if solved:
-                print("Solved.")
+            # if solved:
+            #     print("Solved.")
 
-                # Save the winners.
-                # for n, g in enumerate(best_genomes):
-                #     name = 'winner-{0}'.format(n)
-                #     with open(name+'.pickle', 'wb') as f:
-                #         pickle.dump(g, f)
+            #     # Save the winners.
+            #     # for n, g in enumerate(best_genomes):
+            #     #     name = 'winner-{0}'.format(n)
+            #     #     with open(name+'.pickle', 'wb') as f:
+            #     #         pickle.dump(g, f)
 
-                    # visualize.draw_net(config, g, view=False, filename=name+"-net.gv")
-                    # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled.gv",
-                    #                    show_disabled=False)
-                    # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled-pruned.gv",
-                    #                    show_disabled=False, prune_unused=True)
+            #         # visualize.draw_net(config, g, view=False, filename=name+"-net.gv")
+            #         # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled.gv",
+            #         #                    show_disabled=False)
+            #         # visualize.draw_net(config, g, view=False, filename=name+"-net-enabled-pruned.gv",
+            #         #                    show_disabled=False, prune_unused=True)
 
-                break
+            #     break
         except KeyboardInterrupt:
             print("User break.")
             break
