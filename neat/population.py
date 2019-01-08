@@ -64,8 +64,8 @@ class Population(object):
 
     def get_complexity(self):
         size = [g.size() for g in itervalues(self.population)]
-        size =  zip(*size)
-        return sum(size[0])/len(size[0]), sum(size[1])/len(size[1])
+        sizeinfo =  list(zip(*size))
+        return sum(sizeinfo[0])/len(sizeinfo[0]), sum(sizeinfo[1])/len(sizeinfo[1])
 
     def run(self, fitness_function, n=None):
         """
