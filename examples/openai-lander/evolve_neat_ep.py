@@ -34,7 +34,7 @@ env = gym.make('LunarLander-v2')
 print("action space: {0!r}".format(env.action_space))
 print("observation space: {0!r}".format(env.observation_space))
 
-env = gym.wrappers.Monitor(env, 'results', force=True)
+#env = gym.wrappers.Monitor(env, 'results', force=True)
 
 
 class PooledErrorCompute(object):

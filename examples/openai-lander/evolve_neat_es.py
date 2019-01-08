@@ -33,7 +33,7 @@ env = gym.make('LunarLander-v2')
 print("action space: {0!r}".format(env.action_space))
 print("observation space: {0!r}".format(env.observation_space))
 
-env = gym.wrappers.Monitor(env, 'results', force=True)
+#env = gym.wrappers.Monitor(env, 'results', force=True)
 
 
 class PooledErrorCompute(object):
@@ -80,7 +80,7 @@ class PooledErrorCompute(object):
 
             #self.test_episodes.append((score, data))
 
-        print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
+        #print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
 
     def evaluate_genomes(self, genomes, config):
         self.generation += 1
@@ -90,7 +90,7 @@ class PooledErrorCompute(object):
         for gid, g in genomes:
             nets.append((g, neat.nn.FeedForwardNetwork.create(g, config)))
 
-        print("network creation time {0}".format(time.time() - t0))
+        #print("network creation time {0}".format(time.time() - t0))
         t0 = time.time()
         self.simulate(nets)
 
