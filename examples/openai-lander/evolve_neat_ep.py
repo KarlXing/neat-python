@@ -24,7 +24,6 @@ sys.path.append("../../../")
 from neatpython.neat.genome import DefaultGenome
 from neatpython.neat.population import Population
 from neatpython.neat.reproduction_ep import EPReproduction
-from neatpython.neat.reproduction_es import ESReproduction
 from neatpython.neat.species import DefaultSpeciesSet
 
 
@@ -148,9 +147,9 @@ def run():
     id = str(datetime.datetime.now())
     figfile = "EP_"+id+".svg"
     print("figfile, ", figfile)
-    step = 0
+    g_step = 0
     while 1:
-        step += 1
+        g_step += 1
         try:
             t0 = time.time()
 
@@ -158,17 +157,18 @@ def run():
             #print(gen_best)
 
             all_fit = pop.get_all_fitness()
-            writer.add_scalar('mean fitness', sum(all_fit)/len(all_fit), step)
-            writer.add_scalar('best fitness', stats.most_fit_genomes[-1].fitness, step)
+            writer.add_scalar('analysis/mean fitness', sum(all_fit)/len(all_fit), g_step)
+            writer.add_scalar('analysis/best fitness', stats.most_fit_genomes[-1].fitness, g_step)
 
             complexity = pop.get_complexity()
-            writer.add_scalar('nodes', complexity[0], step)
-            writer.add_scalar('connections', complexity[1], step)
+            writer.add_scalar('analysis/nodes', complexity[0], g_step)
+            writer.add_scalar('analysis/connections', complexity[1], g_step)
+            writer.add_scalar('analysis/species', len(pop.species.species), g_step)
 
-            if step < 5:
+            if g_step < 5:
                 continue
 
-            if step % 5 == 0:
+            if g_step % 5 == 0:
                 pop.fitness_calculate(ec.evaluate_genomes)
 
             # Use the best genomes seen so far as an ensemble-ish control system.
@@ -194,7 +194,7 @@ def run():
                     best_action = np.argmax(votes)
                     observation, reward, done, info = env.step(best_action)
                     score += reward
-                    env.render()
+                    #env.render()
                     if done:
                         break
 
@@ -203,7 +203,7 @@ def run():
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
                 if avg_score < 200:
-                    writer.add_scalar("passed", k, step)
+                    writer.add_scalar("analysis/passed", k, g_step)
                     solved = False
                     break
 

@@ -21,8 +21,7 @@ from tensorboardX import SummaryWriter
 import visualize
 import sys
 sys.path.append("../../../")
-from neatpython.neat.statistics import StatisticsReporter
-from neatpython.neat.reporting import StdOutReporter
+
 from neatpython.neat.genome_pedigree import PedigreeGenome
 from neatpython.neat.population_pedigree import PedigreePopulation
 from neatpython.neat.reproduction_ep import EPReproduction
@@ -35,7 +34,7 @@ env = gym.make('LunarLander-v2')
 print("action space: {0!r}".format(env.action_space))
 print("observation space: {0!r}".format(env.observation_space))
 
-env = gym.wrappers.Monitor(env, 'results', force=True)
+#env = gym.wrappers.Monitor(env, 'results', force=True)
 
 
 def compute_fitness(genome, net, episodes, min_reward, max_reward):
@@ -127,7 +126,7 @@ def run():
     pop = PedigreePopulation(config)
     stats = neat.StatisticsReporter()
     pop.add_reporter(stats)
-    pop.add_reporter(StdOutReporter(True))
+    pop.add_reporter(neat.StdOutReporter(True))
     # Checkpoint every 25 generations or 900 seconds.
     # pop.add_reporter(neat.Checkpointer(100, 9000))
 
@@ -138,9 +137,9 @@ def run():
     pop.fitness_calculate(ec.evaluate_genomes)
     id = str(datetime.datetime.now())
     figfile = "Pedigree_"+id+".svg"
-    step = 0
+    g_step = 0
     while 1:
-        step += 1
+        g_step += 1
         try:
             t0 = time.time()
             gen_best = pop.run(ec.evaluate_genomes, 1)
@@ -148,16 +147,17 @@ def run():
             #visualize.plot_stats(stats, ylog=False, view=False, filename=figfile)
             # starts to check whether the question is solved after the 5th generation
             all_fit = pop.get_all_fitness()
-            writer.add_scalar('mean fitness', sum(all_fit)/len(all_fit), step)
-            writer.add_scalar('best fitness', stats.most_fit_genomes[-1].fitness, step)
+            writer.add_scalar('analysis/mean fitness', sum(all_fit)/len(all_fit), g_step)
+            writer.add_scalar('analysis/best fitness', stats.most_fit_genomes[-1].fitness, g_step)
 
             complexity = pop.get_complexity()
-            writer.add_scalar('nodes', complexity[0], step)
-            writer.add_scalar('connections', complexity[1], step)
-            if step < 5:
+            writer.add_scalar('analysis/nodes', complexity[0], g_step)
+            writer.add_scalar('analysis/connections', complexity[1], g_step)
+            writer.add_scalar('analysis/species', len(pop.species.species), g_step)
+            if g_step < 5:
                 continue
 
-            if step % 5 == 0:
+            if g_step % 5 == 0:
                 pop.fitness_calculate(ec.evaluate_genomes)
             #print("Average mean fitness over last 5 generations: {0}".format(mfs))
 
@@ -187,7 +187,7 @@ def run():
                     best_action = np.argmax(votes)
                     observation, reward, done, info = env.step(best_action)
                     score += reward
-                    env.render()
+                    #env.render()
                     if done:
                         break
 
@@ -196,7 +196,7 @@ def run():
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
                 if avg_score < 200:
-                    writer.add_scalar("passed", k, step)
+                    writer.add_scalar("analysis/passed", k, g_step)
                     solved = False
                     break
 
