@@ -18,7 +18,7 @@ import random
 import time
 import datetime
 from tensorboardX import SummaryWriter
-import visualize
+# import visualize
 import sys
 sys.path.append("../../../")
 
