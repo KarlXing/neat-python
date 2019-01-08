@@ -63,9 +63,6 @@ class PooledErrorCompute(object):
         self.test_episodes = []
         self.generation = 0
 
-        self.min_reward = -200
-        self.max_reward = 200
-
         self.episode_score = []
         self.episode_length = []
 
@@ -75,16 +72,16 @@ class PooledErrorCompute(object):
             data = []
             for i in range(5):
                 observation = env.reset()
-                step = 0
+                # step = 0
                 while 1:
-                    step += 1
-                    if step < 200 and random.random() < 0.2:
-                        action = env.action_space.sample()
-                    else:
-                        output = net.activate(observation)
-                        action = np.argmax(output)
-                # output = net.activate(observation)
-                # action = np.argmax(output)
+                    # step += 1
+                    # if step < 200 and random.random() < 0.2:
+                    #     action = env.action_space.sample()
+                    # else:
+                    #     output = net.activate(observation)
+                    #     action = np.argmax(output)
+                    output = net.activate(observation)
+                    action = np.argmax(output)
 
                     observation, reward, done, info = env.step(action)
                     data.append(np.hstack((observation, action, reward)))
@@ -96,7 +93,7 @@ class PooledErrorCompute(object):
             score = np.sum(data[:,-1])/5
             self.episode_score.append(score)
             scores.append(score)
-            genome.fitness = score+600
+            genome.fitness = score
             self.episode_length.append(step)
 
 
