@@ -91,8 +91,8 @@ class Population(object):
             raise RuntimeError("Cannot have no generational limit with no fitness termination")
 
         k = 0
-        if recalculate:
-            fitness_function(list(iteritems(self.population)), self.config)
+        # if recalculate:
+        #     fitness_function(list(iteritems(self.population)), self.config)
         while n is None or k < n:
             k += 1
 
