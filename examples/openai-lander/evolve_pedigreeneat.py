@@ -17,7 +17,7 @@ import pickle
 import random
 import time
 import datetime
-
+from tensorboardX import SummaryWriter
 import visualize
 import sys
 sys.path.append("../../../")
@@ -27,15 +27,6 @@ from neatpython.neat.genome_pedigree import PedigreeGenome
 from neatpython.neat.population_pedigree import PedigreePopulation
 from neatpython.neat.reproduction_ep import EPReproduction
 from neatpython.neat.species_pedigree import PedigreeSpeciesSet
-# import carl_genome
-# import carl_population
-# import carl_reproduction
-# import carl_species
-
-# from carl_genome import CarlLanderGenome
-# from carl_population import CarlPopulation
-# from carl_species import CarlSpecies, CarlSpeciesSet
-# from carl_reproduction import CarlReproduction
 
 NUM_CORES = 8
 
@@ -109,9 +100,6 @@ class PooledErrorCompute(object):
             genome.fitness = score+600
             self.episode_length.append(step)
 
-            #self.test_episodes.append((score, data))
-
-        #print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
 
     def evaluate_genomes(self, genomes, config):
         self.generation += 1
@@ -125,36 +113,11 @@ class PooledErrorCompute(object):
         t0 = time.time()
         self.simulate(nets)
 
-        # # Periodically generate a new set of episodes for comparison.
-        # if 1 == self.generation % 10:
-        #     self.test_episodes = self.test_episodes[-300:]
-        #     self.simulate(nets)
-        #     print("simulation run time {0}".format(time.time() - t0))
-        #     t0 = time.time()
-
-        # # Assign a composite fitness to each genome; genomes can make progress either
-        # # by improving their total reward or by making more accurate reward estimates.
-        # print("Evaluating {0} test episodes".format(len(self.test_episodes)))
-        # if self.pool is None:
-        #     for genome, net in nets:
-        #         reward_error = compute_fitness(genome, net, self.test_episodes, self.min_reward, self.max_reward)
-        #         genome.fitness = -np.sum(reward_error) / len(self.test_episodes)
-        # else:
-        #     jobs = []
-        #     for genome, net in nets:
-        #         jobs.append(self.pool.apply_async(compute_fitness,
-        #             (genome, net, self.test_episodes, self.min_reward, self.max_reward)))
-
-        #     for job, (genome_id, genome) in zip(jobs, genomes):
-        #         reward_error = job.get(timeout=None)
-        #         genome.fitness = -np.sum(reward_error) / len(self.test_episodes)
-
-        #print("final fitness compute time {0}\n".format(time.time() - t0))
-
 
 def run():
     # Load the config file, which is assumed to live in
     # the same directory as this script.
+    writer = SummaryWriter()
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, 'pedigreeconfig')
     config = neat.Config(PedigreeGenome, EPReproduction,
@@ -175,38 +138,37 @@ def run():
     pop.fitness_calculate(ec.evaluate_genomes)
     id = str(datetime.datetime.now())
     figfile = "Pedigree_"+id+".svg"
+    step = 0
     while 1:
+        step += 1
         try:
             t0 = time.time()
-            gen_best = pop.run(ec.evaluate_genomes, 5)
-            print("population 5 generations time {0}".format(time.time() - t0))
+            gen_best = pop.run(ec.evaluate_genomes, 1)
 
+            #visualize.plot_stats(stats, ylog=False, view=False, filename=figfile)
+            # starts to check whether the question is solved after the 5th generation
+            all_fit = pop.get_all_fitness()
+            writer.add_scalar('mean fitness', sum(all_fit)/len(all_fit), step)
+            writer.add_scalar('best fitness', stats.most_fit_genomes[-1].fitness, step)
 
-            #print(gen_best)
+            complexity = pop.get_complexity()
+            writer.add_scalar('nodes', complexity[0], step)
+            writer.add_scalar('connections', complexity[1], step)
+            if step < 5:
+                continue
 
-            visualize.plot_stats(stats, ylog=False, view=False, filename=figfile)
-            
-            # plt.plot(ec.episode_score, 'g-', label='score')
-            # plt.plot(ec.episode_length, 'b-', label='length')
-            # plt.grid()
-            # plt.legend(loc='best')
-            # plt.savefig("scores.svg")
-            # plt.close()
+            if step % 5 == 0:
+                pop.fitness_calculate(ec.evaluate_genomes)
+            #print("Average mean fitness over last 5 generations: {0}".format(mfs))
 
-            mfs = sum(stats.get_fitness_mean()[-5:]) / 5.0
-            print("Average mean fitness over last 5 generations: {0}".format(mfs))
-
-            mfs = sum(stats.get_fitness_stat(min)[-5:]) / 5.0
-            print("Average min fitness over last 5 generations: {0}".format(mfs))
+            #mfs = sum(stats.get_fitness_stat(min)[-5:]) / 5.0
+            #print("Average min fitness over last 5 generations: {0}".format(mfs))
 
             # Use the best genomes seen so far as an ensemble-ish control system.
             best_genomes = stats.best_unique_genomes(5)
             best_networks = []
-            best_gid = []
             for g in best_genomes:
                 best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
-                best_gid.append(g.key)
-            print("best genomes id : ", best_gid)
             solved = True
             best_scores = []
             for k in range(100):
@@ -231,11 +193,10 @@ def run():
 
                 ec.episode_score.append(score)
                 ec.episode_length.append(step)
-                print("get score: ", score)
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
                 if avg_score < 200:
-                    print("passed: ", k)
+                    writer.add_scalar("passed", k, step)
                     solved = False
                     break
 
@@ -261,7 +222,7 @@ def run():
     
     stats_file = "PedigreeStats_"+id+".p"
     pickle.dump(stats, open(stats_file, "wb"))
-
+    writer.close()
     env.close()
 
 

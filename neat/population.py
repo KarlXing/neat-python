@@ -59,7 +59,15 @@ class Population(object):
     def fitness_calculate(self, fitness_function):
         fitness_function(list(iteritems(self.population)), self.config)
 
-    def run(self, fitness_function, recalculate, n=None):
+    def get_all_fitness(self):
+        return [g.fitness for g in itervalues(self.population)]
+
+    def get_complexity(self):
+        size = [g.size() for g in itervalues(self.population)]
+        size =  zip(*size)
+        return sum(size[0])/len(size[0]), sum(size[1])/len(size[1])
+
+    def run(self, fitness_function, n=None):
         """
         Runs NEAT's genetic algorithm for at most n generations.  If n
         is None, run until solution is found or extinction occurs.

@@ -17,7 +17,7 @@ import pickle
 import random
 import time
 import datetime
-
+from tensorboardX import SummaryWriter
 import visualize
 import sys
 sys.path.append("../../../")
@@ -126,6 +126,7 @@ class PooledErrorCompute(object):
 def run():
     # Load the config file, which is assumed to live in
     # the same directory as this script.
+    writer = SummaryWriter()
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, 'config')
     config = neat.Config(DefaultGenome, EPReproduction,
@@ -136,7 +137,6 @@ def run():
     stats = neat.StatisticsReporter()
     pop.add_reporter(stats)
     pop.add_reporter(neat.StdOutReporter(True))
-
     # Checkpoint every 25 generations or 900 seconds.
     # pop.add_reporter(neat.Checkpointer(100, 9000))
 
@@ -148,36 +148,34 @@ def run():
     id = str(datetime.datetime.now())
     figfile = "EP_"+id+".svg"
     print("figfile, ", figfile)
+    step = 0
     while 1:
+        step += 1
         try:
             t0 = time.time()
 
-            gen_best = pop.run(ec.evaluate_genomes, True, 5)
+            gen_best = pop.run(ec.evaluate_genomes, 1)
             #print(gen_best)
 
-            visualize.plot_stats(stats, ylog=False, view=False, filename=figfile)
-            print("done visualize")
-            # plt.plot(ec.episode_score, 'g-', label='score')
-            # plt.plot(ec.episode_length, 'b-', label='length')
-            # plt.grid()
-            # plt.legend(loc='best')
-            # plt.savefig("scores.svg")
-            # plt.close()
+            all_fit = pop.get_all_fitness()
+            writer.add_scalar('mean fitness', sum(all_fit)/len(all_fit), step)
+            writer.add_scalar('best fitness', stats.most_fit_genomes[-1].fitness, step)
 
-            mfs = sum(stats.get_fitness_mean()[-5:]) / 5.0
-            print("Average mean fitness over last 5 generations: {0}".format(mfs))
+            complexity = pop.get_complexity()
+            writer.add_scalar('nodes', complexity[0], step)
+            writer.add_scalar('connections', complexity[1], step)
 
-            mfs = sum(stats.get_fitness_stat(min)[-5:]) / 5.0
-            print("Average min fitness over last 5 generations: {0}".format(mfs))
+            if step < 5:
+                continue
+
+            if step % 5 == 0:
+                pop.fitness_calculate(ec.evaluate_genomes)
 
             # Use the best genomes seen so far as an ensemble-ish control system.
             best_genomes = stats.best_unique_genomes(5)
             best_networks = []
-            best_gid = []
             for g in best_genomes:
                 best_networks.append(neat.nn.FeedForwardNetwork.create(g, config))
-                best_gid.append(g.key)
-            print("best genomes id : ", best_gid)
             solved = True
             best_scores = []
             for k in range(100):
@@ -202,11 +200,10 @@ def run():
 
                 ec.episode_score.append(score)
                 ec.episode_length.append(step)
-                print("get score: ", score)
                 best_scores.append(score)
                 avg_score = sum(best_scores) / len(best_scores)
                 if avg_score < 200:
-                    print("passed: ", k)
+                    writer.add_scalar("passed", k, step)
                     solved = False
                     break
 
@@ -231,6 +228,7 @@ def run():
             break
     stats_file = "NEAT_EP_Stats_"+id+".p"
     pickle.dump(stats, open(stats_file, "wb"))
+    writer.close()
     env.close()
 
 
